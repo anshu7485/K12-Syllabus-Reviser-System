@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Login Test Form</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        .container { max-width: 400px; margin: 0 auto; }
+        .form-group { margin: 15px 0; }
+        label { display: block; margin-bottom: 5px; font-weight: bold; }
+        input { width: 100%; padding: 10px; border: 1px solid #ccc; border-radius: 4px; }
+        button { width: 100%; padding: 12px; background: #007bff; color: white; border: none; border-radius: 4px; cursor: pointer; }
+        button:hover { background: #0056b3; }
+        .result { margin: 15px 0; padding: 10px; border-radius: 4px; }
+        .success { background: #d4edda; color: #155724; border: 1px solid #c3e6cb; }
+        .error { background: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; }
+        .info { background: #d1ecf1; color: #0c5460; border: 1px solid #bee5eb; }
+        .user-switch { margin: 10px 0; }
+        .user-btn { margin: 2px; padding: 5px 10px; font-size: 12px; background: #28a745; color: white; border: none; border-radius: 3px; cursor: pointer; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h2>K12 System Login Test</h2>
+        
+        <div class="user-switch">
+            <p>Quick Fill:</p>
+            <button class="user-btn" onclick="fillStudent()">Student</button>
+            <button class="user-btn" onclick="fillTeacher()">Teacher</button>
+            <button class="user-btn" onclick="fillAdmin()">Admin</button>
+        </div>
+
+        <form onsubmit="handleLogin(event)">
+            <div class="form-group">
+                <label for="email">Email:</label>
+                <input type="email" id="email" required>
+            </div>
+            
+            <div class="form-group">
+                <label for="password">Password:</label>
+                <input type="password" id="password" required>
+            </div>
+            
+            <button type="submit">Login</button>
+        </form>
+
+        <div id="result"></div>
+        
+        <div class="form-group">
+            <button onclick="checkLocalStorage()" style="background: #6c757d;">Check LocalStorage</button>
+            <button onclick="clearStorage()" style="background: #dc3545;">Clear Storage</button>
+        </div>
+    </div>
+
+    <script>
+        function fillStudent() {
+            document.getElementById('email').value = 'student@example.com';
+            document.getElementById('password').value = 'password123';
+        }
+
+        function fillTeacher() {
+            document.getElementById('email').value = 'teacher@example.com';
+            document.getElementById('password').value = 'password123';
+        }
+
+        function fillAdmin() {
+            document.getElementById('email').value = 'admin@example.com';
+            document.getElementById('password').value = 'password123';
+        }
+
+        async function handleLogin(event) {
+            event.preventDefault();
+            
+            const email = document.getElementById('email').value;
+            const password = document.getElementById('password').value;
+            const resultDiv = document.getElementById('result');
+
+            resultDiv.innerHTML = '<div class="info">🔄 Logging in...</div>';
+
+            try {
+                console.log("Login attempt with:", { email, password });
+
+                const response = await fetch('http://localhost:8000/login', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ email, password })
+                });
+
+                const data = await response.json();
+                console.log("Login response:", data);
+
+                if (response.ok) {
+                    // Save to localStorage
+                    localStorage.setItem('token', data.access_token);
+                    localStorage.setItem('user', JSON.stringify(data.user));
+                    console.log("Saved to localStorage:", { token: data.access_token, user: data.user });
+
+                    // Determine redirect URL
+                    let redirectUrl = '/dashboard';
+                    if (data.user.role === 'admin') {
+                        redirectUrl = '/admin';
+                    } else if (data.user.role === 'teacher') {
+                        redirectUrl = '/teacher';
+                    }
+
+                    resultDiv.innerHTML = `
+                        <div class="success">
+                            ✅ Login Successful!<br>
+                            Welcome: ${data.user.name}<br>
+                            Role: ${data.user.role}<br>
+                            ${data.user.student_class ? `Class: ${data.user.student_class}<br>` : ''}
+                            Token: ${data.access_token}<br>
+                            Would redirect to: ${redirectUrl}<br>
+                            <br>
+                            <a href="http://localhost:5173${redirectUrl}" target="_blank" style="color: #007bff;">
+                                🔗 Open Frontend Dashboard
+                            </a>
+                        </div>
+                    `;
+                } else {
+                    resultDiv.innerHTML = `<div class="error">❌ Login Failed: ${data.message}</div>`;
+                }
+            } catch (error) {
+                console.error("Login error:", error);
+                resultDiv.innerHTML = `<div class="error">❌ Error: ${error.message}</div>`;
+            }
+        }
+
+        function checkLocalStorage() {
+            const token = localStorage.getItem('token');
+            const user = localStorage.getItem('user');
+            const resultDiv = document.getElementById('result');
+
+            if (token && user) {
+                const userData = JSON.parse(user);
+                resultDiv.innerHTML = `
+                    <div class="info">
+                        📦 LocalStorage Contents:<br>
+                        Token: ${token}<br>
+                        User: ${userData.name}<br>
+                        Email: ${userData.email}<br>
+                        Role: ${userData.role}<br>
+                        ${userData.student_class ? `Class: ${userData.student_class}` : ''}
+                    </div>
+                `;
+            } else {
+                resultDiv.innerHTML = '<div class="error">❌ No data in localStorage</div>';
+            }
+        }
+
+        function clearStorage() {
+            localStorage.removeItem('token');
+            localStorage.removeItem('user');
+            document.getElementById('result').innerHTML = '<div class="info">🧹 LocalStorage cleared</div>';
+        }
+    </script>
+</body>
+</html>
