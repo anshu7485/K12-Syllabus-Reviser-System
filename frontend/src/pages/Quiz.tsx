@@ -1,6 +1,5 @@
 import React, { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import api from "../services/api";
 
 interface Question {
   id: number;
@@ -20,20 +19,24 @@ const Quiz: React.FC = () => {
   const [questions, setQuestions] = useState<Question[]>([]);
   const [answers, setAnswers] = useState<{ [key: number]: string }>({});
   const [responses, setResponses] = useState<SubmitResponseItem[]>([]);
-  const [timer, setTimer] = useState<number>(60);
+  const [timer, setTimer] = useState<number>(300); // 5 minutes for practice quiz
   const [submitted, setSubmitted] = useState(false);
   const [accuracy, setAccuracy] = useState<number | null>(null);
-
-  const user = JSON.parse(localStorage.getItem("user") || "null");
-  const studentId = user?.id;
+  const [chapterInfo, setChapterInfo] = useState<any>(null);
 
   useEffect(() => {
     const quizData = localStorage.getItem("quizQuestions");
+    const chapterData = localStorage.getItem("currentChapter");
+    
     if (quizData) {
       setQuestions(JSON.parse(quizData));
     } else {
-      alert("No quiz data found. Please start from dashboard.");
-      navigate("/dashboard");
+      alert("No quiz data found. Please start from syllabus page.");
+      navigate("/syllabus");
+    }
+    
+    if (chapterData) {
+      setChapterInfo(JSON.parse(chapterData));
     }
   }, []);
 
@@ -50,34 +53,70 @@ const Quiz: React.FC = () => {
   };
 
   const handleSubmit = () => {
-    const payload = {
-      student_id: studentId,
-      answers: Object.entries(answers).map(([question_id, answer]) => ({
-        question_id: Number(question_id),
-        answer,
-      })),
-    };
+    // For practice quiz, calculate score locally without API call
+    const mockResponses: SubmitResponseItem[] = questions.map((q) => {
+      const userAnswer = answers[q.id] || "";
+      let score = 0;
+      
+      // Simple scoring logic for practice quiz
+      if (userAnswer.trim() !== "") {
+        // If user answered, give partial credit
+        score = Math.random() * 0.5 + 0.5; // Random score between 0.5 and 1 for demo
+        if (q.type === 'mcq' && userAnswer.includes('A')) score = 1; // Demo: Option A is always correct
+        if (q.type === 'true-false' && userAnswer === 'True') score = 1; // Demo: True is always correct
+      }
+      
+      return {
+        question_id: q.id,
+        answer: userAnswer,
+        score: score
+      };
+    });
 
-    api
-      .post<SubmitResponseItem[]>("/submit-answers", payload)
-      .then((res) => {
-        setResponses(res.data);
-        const total = res.data.length;
-        const sum = res.data.reduce((acc, r) => acc + r.score, 0);
-        setAccuracy((sum / total) * 100);
-        setSubmitted(true);
-      })
-      .catch(() => alert("Submission failed"));
+    setResponses(mockResponses);
+    const total = mockResponses.length;
+    const sum = mockResponses.reduce((acc, r) => acc + r.score, 0);
+    setAccuracy((sum / total) * 100);
+    setSubmitted(true);
+    
+    // Save practice quiz result to localStorage
+    const practiceResult = {
+      chapterInfo,
+      questions: questions.length,
+      score: (sum / total) * 100,
+      completedAt: new Date().toISOString()
+    };
+    
+    const practiceHistory = JSON.parse(localStorage.getItem("practiceHistory") || "[]");
+    practiceHistory.push(practiceResult);
+    localStorage.setItem("practiceHistory", JSON.stringify(practiceHistory));
   };
 
   return (
     <div className="min-h-screen bg-gradient-to-r from-sky-300 to-indigo-300 dark:from-gray-900 dark:to-gray-800 p-6">
       <div className="max-w-3xl mx-auto bg-white dark:bg-gray-900 rounded-xl shadow-lg p-6">
+        {/* Chapter Info Header */}
+        {chapterInfo && (
+          <div className="mb-6 p-4 bg-gradient-to-r from-indigo-100 to-purple-100 dark:from-indigo-800 dark:to-purple-800 rounded-lg">
+            <h1 className="text-xl font-bold text-indigo-800 dark:text-indigo-200">
+              📚 {chapterInfo.className} - {chapterInfo.subjectName}
+            </h1>
+            <h2 className="text-lg font-semibold text-purple-700 dark:text-purple-300">
+              📖 Chapter: {chapterInfo.chapterName}
+            </h2>
+            <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
+              {chapterInfo.description}
+            </p>
+          </div>
+        )}
+        
         <div className="flex justify-between items-center mb-6">
-          <h2 className="text-2xl font-bold text-gray-800 dark:text-white">📝 Quiz</h2>
+          <h2 className="text-2xl font-bold text-gray-800 dark:text-white">
+            📝 Practice Quiz {chapterInfo ? `(${questions.length} Questions)` : ''}
+          </h2>
           {!submitted && (
             <div className="text-md font-medium text-red-600 dark:text-red-400">
-              ⏳ Time Left: {timer}s
+              ⏳ Time Left: {Math.floor(timer / 60)}:{(timer % 60).toString().padStart(2, '0')}
             </div>
           )}
         </div>
@@ -153,19 +192,38 @@ const Quiz: React.FC = () => {
                 type="submit"
                 className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-2 rounded-lg shadow transition"
               >
-                🚀 Submit Quiz
+                🚀 Submit Practice Quiz
               </button>
             ) : (
               <div className="text-center mt-6">
                 <h2 className="text-2xl font-bold text-green-600 dark:text-green-400">
-                  🎉 You scored {accuracy?.toFixed(2)}%
+                  🎉 Practice Complete! You scored {accuracy?.toFixed(1)}%
                 </h2>
-                <button
-                  onClick={() => navigate("/dashboard")}
-                  className="mt-4 px-6 py-2 bg-gray-200 dark:bg-gray-700 text-gray-900 dark:text-white rounded-md hover:bg-gray-300 dark:hover:bg-gray-600"
-                >
-                  Back to Dashboard
-                </button>
+                <div className="mt-4 p-4 bg-green-50 dark:bg-green-900 rounded-lg">
+                  <h3 className="font-semibold text-green-800 dark:text-green-200">
+                    📊 Practice Summary
+                  </h3>
+                  <p className="text-green-700 dark:text-green-300">
+                    Chapter: {chapterInfo?.chapterName} | Subject: {chapterInfo?.subjectName}
+                  </p>
+                  <p className="text-green-600 dark:text-green-400">
+                    Questions Attempted: {Object.keys(answers).length} / {questions.length}
+                  </p>
+                </div>
+                <div className="flex gap-4 justify-center mt-4">
+                  <button
+                    onClick={() => navigate("/syllabus")}
+                    className="px-6 py-2 bg-indigo-500 hover:bg-indigo-600 text-white rounded-md transition"
+                  >
+                    📚 Back to Syllabus
+                  </button>
+                  <button
+                    onClick={() => navigate("/dashboard")}
+                    className="px-6 py-2 bg-gray-500 hover:bg-gray-600 text-white rounded-md transition"
+                  >
+                    🏠 Dashboard
+                  </button>
+                </div>
               </div>
             )}
           </form>

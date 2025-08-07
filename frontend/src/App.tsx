@@ -190,6 +190,18 @@ function App() {
         />
 
         <Route
+          path="/quiz"
+          element={
+            <ProtectedRoute>
+              <>
+                <Navbar />
+                <Quiz />
+              </>
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
           path="/progress"
           element={
             <ProtectedRoute>
