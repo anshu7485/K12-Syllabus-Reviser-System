@@ -4,6 +4,7 @@ from flask_mysqldb import MySQL
 from flask_bcrypt import Bcrypt
 import os
 import MySQLdb
+from functools import wraps
 from routes.performance import performance_bp
 from routes.subject import subject_bp
 from routes.upload import upload_bp
@@ -13,7 +14,7 @@ from routes.upload import upload_bp
 
 app = Flask(__name__)
 CORS(app, origins=["http://localhost:5173"], methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"], 
-     allow_headers=["Content-Type", "Authorization"])
+    allow_headers=["Content-Type", "Authorization"])
 
 
 # ============================ App Configuration ============================
@@ -100,6 +101,45 @@ with app.app_context():
         print("✅ Database tables created successfully!")
     else:
         print("⚠️ db_schema.sql not found at:", schema_path)
+
+# ============================ Authentication Helpers ============================
+
+def get_user_from_request():
+    """Extract user info from request headers or session"""
+    # Simple implementation - in production, use proper JWT tokens
+    user_id = request.headers.get('X-User-ID')
+    if user_id:
+        cursor = mysql.connection.cursor()
+        cursor.execute("SELECT id, name, email, role, student_class FROM users WHERE id = %s", (user_id,))
+        user = cursor.fetchone()
+        cursor.close()
+        if user:
+            return {
+                'id': user[0],
+                'name': user[1], 
+                'email': user[2],
+                'role': user[3],
+                'student_class': user[4]
+            }
+    return None
+
+def require_student_class_access(f):
+    """Decorator to ensure students can only access their own class data"""
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        requested_class = request.args.get('class') or request.json.get('class_name') if request.json else None
+        user = get_user_from_request()
+        
+        # Skip check for non-students or if no class specified
+        if not user or user['role'] != 'student' or not requested_class:
+            return f(*args, **kwargs)
+            
+        # For students, check if they're trying to access their own class
+        if user['student_class'] != requested_class:
+            return jsonify({"error": "Access denied: You can only access content for your enrolled class"}), 403
+            
+        return f(*args, **kwargs)
+    return decorated_function
 
 # ============================ Signup Endpoint ============================
 
@@ -248,6 +288,176 @@ def upload_question_v2():
     return jsonify({"message": "Question uploaded successfully", "question_id": question_id}), 201
 
 # ============================ Get Uploaded Questions by Teacher ============================
+
+# ============================ Get Topics for Subject ============================
+
+@app.route('/topics/<int:subject_id>', methods=['GET'])
+def get_topics_for_subject(subject_id):
+    try:
+        cursor = mysql.connection.cursor()
+        
+        # Get subject details first
+        cursor.execute("SELECT name, class_name FROM subjects WHERE id = %s", (subject_id,))
+        subject_result = cursor.fetchone()
+        
+        if not subject_result:
+            return jsonify({"error": "Subject not found"}), 404
+            
+        subject_name, class_name = subject_result
+        
+        # Get unique topics for this subject and class
+        query = """
+            SELECT DISTINCT topic, COUNT(*) as question_count
+            FROM questions 
+            WHERE subject = %s AND class_name = %s AND topic IS NOT NULL
+            GROUP BY topic
+            ORDER BY topic
+        """
+        cursor.execute(query, (subject_name, class_name))
+        topics = cursor.fetchall()
+        cursor.close()
+
+        result = []
+        for i, (topic_name, question_count) in enumerate(topics, 1):
+            result.append({
+                "id": i,
+                "name": topic_name,
+                "subject_id": subject_id,
+                "question_count": question_count
+            })
+
+        return jsonify(result), 200
+        
+    except Exception as e:
+        print("Error in get_topics_for_subject():", e)
+        return jsonify({"error": str(e)}), 500
+
+# ============================ Get Questions for Students (Class-wise filtered) ============================
+
+@app.route('/questions', methods=['GET'])
+@require_student_class_access
+def get_questions_for_students():
+    try:
+        # Get query parameters
+        class_name = request.args.get('class')
+        subject_id = request.args.get('subject_id')
+        topic_id = request.args.get('topic_id')
+        question_type = request.args.get('type')
+        
+        # Validate required parameters
+        if not class_name:
+            return jsonify({"message": "Class is required"}), 400
+
+        cursor = mysql.connection.cursor()
+        
+        # Base query with class filter
+        query = """
+            SELECT id, class_name, subject, topic, type, question, 
+                   option1, option2, option3, option4, correct_answer
+            FROM questions 
+            WHERE class_name = %s
+        """
+        params = [class_name]
+        
+        # Add additional filters if provided
+        if subject_id:
+            # Get subject name from subject ID for filtering
+            cursor.execute("SELECT name FROM subjects WHERE id = %s", (subject_id,))
+            subject_result = cursor.fetchone()
+            if subject_result:
+                query += " AND subject = %s"
+                params.append(subject_result[0])
+        
+        if topic_id:
+            query += " AND topic_id = %s"
+            params.append(topic_id)
+            
+        if question_type:
+            query += " AND type = %s"
+            params.append(question_type)
+        
+        # Limit to reasonable number of questions for quiz
+        query += " ORDER BY RAND() LIMIT 20"
+        
+        cursor.execute(query, tuple(params))
+        questions = cursor.fetchall()
+        cursor.close()
+
+        result = []
+        for q in questions:
+            question_data = {
+                "id": q[0],
+                "class_name": q[1],
+                "subject": q[2],
+                "topic": q[3],
+                "type": q[4],
+                "question": q[5],
+                "correct_answer": q[10]
+            }
+            
+            # Add options for MCQ type questions
+            if q[4] == 'mcq' and any([q[6], q[7], q[8], q[9]]):
+                options = []
+                if q[6]: options.append(q[6])
+                if q[7]: options.append(q[7])
+                if q[8]: options.append(q[8])
+                if q[9]: options.append(q[9])
+                question_data["options"] = ", ".join(options)
+            elif q[4] == 'true-false':
+                question_data["options"] = "True, False"
+                
+            result.append(question_data)
+
+        return jsonify({"questions": result}), 200
+        
+    except Exception as e:
+        print("Error in get_questions_for_students():", e)
+        return jsonify({"error": str(e)}), 500
+
+# ============================ Get All Questions (Admin only) ============================
+
+@app.route('/questions/all', methods=['GET'])
+def get_all_questions():
+    try:
+        cursor = mysql.connection.cursor()
+        query = """
+            SELECT id, class_name, subject, topic, type, question, 
+                   option1, option2, option3, option4, correct_answer, uploaded_by, created_at
+            FROM questions 
+            ORDER BY created_at DESC
+        """
+        cursor.execute(query)
+        questions = cursor.fetchall()
+        cursor.close()
+
+        result = []
+        for q in questions:
+            options = []
+            if q[6]: options.append(q[6])  # option1
+            if q[7]: options.append(q[7])  # option2
+            if q[8]: options.append(q[8])  # option3
+            if q[9]: options.append(q[9])  # option4
+                
+            result.append({
+                "id": q[0],
+                "class_name": q[1],
+                "subject": q[2],
+                "topic": q[3],
+                "type": q[4],
+                "question": q[5],
+                "options": options,
+                "correct_answer": q[10],
+                "uploaded_by": q[11],
+                "created_at": str(q[12]) if q[12] else None
+            })
+
+        return jsonify(result), 200
+        
+    except Exception as e:
+        print("Error in get_all_questions():", e)
+        return jsonify({"error": str(e)}), 500
+
+# ============================ Get Questions Uploaded by Teacher ============================
 
 @app.route('/questions/uploaded-by/<int:teacher_id>', methods=['GET'])
 def get_uploaded_questions(teacher_id):

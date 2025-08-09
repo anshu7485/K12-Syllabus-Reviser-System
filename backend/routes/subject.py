@@ -1,6 +1,25 @@
 from flask import Blueprint, request, jsonify, current_app
+from functools import wraps
 
 subject_bp = Blueprint('subject_bp', __name__)
+
+def get_user_from_request():
+    """Extract user info from request headers"""
+    user_id = request.headers.get('X-User-ID')
+    if user_id:
+        cursor = current_app.mysql.connection.cursor()
+        cursor.execute("SELECT id, name, email, role, student_class FROM users WHERE id = %s", (user_id,))
+        user = cursor.fetchone()
+        cursor.close()
+        if user:
+            return {
+                'id': user[0],
+                'name': user[1], 
+                'email': user[2],
+                'role': user[3],
+                'student_class': user[4]
+            }
+    return None
 
 @subject_bp.route('/subjects', methods=['POST'])
 def add_subject():
@@ -26,6 +45,12 @@ def add_subject():
 @subject_bp.route('/subjects/<string:class_id>', methods=['GET'])
 def get_subjects(class_id):
     try:
+        # Check if student is trying to access their own class only
+        user = get_user_from_request()
+        if user and user['role'] == 'student':
+            if user['student_class'] != class_id:
+                return jsonify({'error': 'Access denied: You can only access subjects for your enrolled class'}), 403
+        
         cursor = current_app.mysql.connection.cursor()
         query = "SELECT * FROM subjects WHERE class_name = %s"
         cursor.execute(query, (class_id,))

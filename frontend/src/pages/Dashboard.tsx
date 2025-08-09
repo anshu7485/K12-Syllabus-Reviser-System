@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import axios from "axios";
+import api from "../services/api";
 import { useNavigate } from "react-router-dom";
 
 interface Subject {
@@ -31,16 +31,16 @@ const Dashboard: React.FC = () => {
       return;
     }
 
-    axios
-      .get<Subject[]>(`http://localhost:8000/subjects/${studentClass}`)
+    api
+      .get<Subject[]>(`/subjects/${studentClass}`)
       .then((res) => setSubjects(res.data))
       .catch(() => setError("❌ Failed to load subjects for your class."));
   }, [studentClass]);
 
   useEffect(() => {
     if (selectedSubject !== null) {
-      axios
-        .get<Topic[]>(`http://localhost:8000/topics/${selectedSubject}`)
+      api
+        .get<Topic[]>(`/topics/${selectedSubject}`)
         .then((res) => setTopics(res.data))
         .catch(() => setError("❌ Failed to load topics"));
     }

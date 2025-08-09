@@ -76,7 +76,7 @@ const AdminDashboard: React.FC = () => {
 
   const fetchQuestions = () => {
     return api
-      .get<Question[]>("/questions")
+      .get<Question[]>("/questions/all")
       .then((res) => setQuestions(res.data));
   };
 

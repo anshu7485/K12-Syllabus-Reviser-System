@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import axios from "axios";
+import api from "../services/api";
 import {
   BarChart,
   Bar,
@@ -53,8 +53,8 @@ const Progress: React.FC = () => {
   // Fetch subjects for dropdown
   useEffect(() => {
     if (user?.student_class) {
-      axios
-        .get<Subject[]>(`http://localhost:8000/subjects/${user.student_class}`)
+      api
+        .get<Subject[]>(`/subjects/${user.student_class}`)
         .then((res) => setSubjects(res.data))
         .catch(() => setSubjects([]));
     }
@@ -63,8 +63,8 @@ const Progress: React.FC = () => {
   // Fetch subject-wise performance for the student's actual subjects
   useEffect(() => {
     if (studentId && user?.student_class) {
-      axios
-        .get<SubjectPerformance[]>(`http://localhost:8000/progress/subject/${studentId}`)
+      api
+        .get<SubjectPerformance[]>(`/progress/subject/${studentId}`)
         .then((res) => {
           // Only keep subjects that are in the fetched subjects list
           const allowedSubjects = new Set(subjects.map((s) => s.name));
@@ -77,8 +77,8 @@ const Progress: React.FC = () => {
   // Fetch topics when subject changes
   useEffect(() => {
     if (selectedSubject) {
-      axios
-        .get<Topic[]>(`http://localhost:8000/topics/${selectedSubject}`)
+      api
+        .get<Topic[]>(`/topics/${selectedSubject}`)
         .then((res) => setTopics(res.data))
         .catch(() => setTopics([]));
     } else {
@@ -89,8 +89,8 @@ const Progress: React.FC = () => {
   // Fetch main progress
   useEffect(() => {
     if (studentId) {
-      axios
-        .get<ProgressData>(`http://localhost:8000/progress/${studentId}`)
+      api
+        .get<ProgressData>(`/progress/${studentId}`)
         .then((res) => setProgress(res.data))
         .catch(() => setError("Failed to load progress data."));
     }
