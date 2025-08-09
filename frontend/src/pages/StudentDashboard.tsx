@@ -84,6 +84,18 @@ const StudentDashboard: React.FC = () => {
           🎓 Student Dashboard
         </h1>
 
+        {/* Student Class Info */}
+        {studentClass && (
+          <div className="mb-6 p-4 bg-blue-500/20 border border-blue-400/30 rounded-xl text-center">
+            <p className="text-gray-700 dark:text-gray-300 font-medium">
+              📚 Your enrolled class: <span className="font-bold text-indigo-600 dark:text-indigo-400">Class {studentClass}</span>
+            </p>
+            <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
+              You can only access subjects and practice materials for your enrolled class.
+            </p>
+          </div>
+        )}
+
         {/* Subject Selection */}
         <div className="mb-6">
           <label className="block font-bold bg-gradient-to-r from-indigo-600 via-pink-500 to-yellow-500 bg-clip-text text-transparent mb-2">

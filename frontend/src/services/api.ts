@@ -28,4 +28,19 @@ api.interceptors.request.use((config) => {
   return config;
 });
 
+// ✅ Add response interceptor to handle class access errors
+api.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    if (error.response?.status === 403) {
+      const errorMessage = error.response.data?.error;
+      if (errorMessage && errorMessage.includes("class")) {
+        // Show user-friendly message for class access errors
+        alert(`Access Restricted: ${errorMessage}`);
+      }
+    }
+    return Promise.reject(error);
+  }
+);
+
 export default api;

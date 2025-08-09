@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { Book, ChevronDown, GraduationCap, School, BookOpen, FileText, ChevronRight, Play, ArrowLeft } from "lucide-react";
 
@@ -14,6 +14,15 @@ interface Chapter {
 interface Subject {
   name: string;
   chapters: Chapter[];
+}
+
+// User interface
+interface User {
+  id: number;
+  name: string;
+  email: string;
+  role: string;
+  student_class?: string;
 }
 
 const subjectsPerClass: Record<string, Subject[]> = {
@@ -154,6 +163,25 @@ export default function Syllabus() {
   const [selectedSubject, setSelectedSubject] = useState<Subject | null>(null);
   const [selectedChapter, setSelectedChapter] = useState<Chapter | null>(null);
   const [showPracticeQuestions, setShowPracticeQuestions] = useState<boolean>(false);
+  const [userClass, setUserClass] = useState<string | null>(null);
+  const [availableClasses, setAvailableClasses] = useState<string[]>(classes);
+
+  // Check user role and class on component mount
+  useEffect(() => {
+    const user = JSON.parse(localStorage.getItem("user") || "{}");
+    if (user && user.role === "student" && user.student_class) {
+      const studentClassFormatted = `Class ${user.student_class}`;
+      setUserClass(studentClassFormatted);
+      setSelectedClass(studentClassFormatted);
+      setAvailableClasses([studentClassFormatted]); // Only show student's class
+    } else if (user && (user.role === "teacher" || user.role === "admin")) {
+      // Teachers and admins can see all classes
+      setAvailableClasses(classes);
+    } else {
+      // If no user found, redirect to login
+      navigate("/login");
+    }
+  }, [navigate]);
 
   const handleSubjectClick = (subject: Subject) => {
     setSelectedSubject(subject);
@@ -289,6 +317,15 @@ export default function Syllabus() {
           </div>
         </div>
 
+        {/* Student Class Notice */}
+        {userClass && (
+          <div className="mb-6 p-4 bg-blue-500/20 border border-blue-400/30 rounded-xl text-center">
+            <p className="text-white/90 font-medium">
+              📚 You are accessing content for your enrolled class: <span className="font-bold text-yellow-300">{userClass}</span>
+            </p>
+          </div>
+        )}
+
         {/* Navigation Breadcrumb */}
         {(selectedSubject || selectedChapter) && (
           <div className="mb-6 flex items-center gap-2 text-white">
@@ -329,11 +366,12 @@ export default function Syllabus() {
             </label>
             <div className="relative w-64">
               <select
-                className="w-full px-4 py-3 border-2 border-indigo-300 rounded-xl shadow-lg focus:outline-none focus:ring-2 focus:ring-pink-400 bg-white/80 text-lg md:text-xl font-semibold transition"
+                className="w-full px-4 py-3 border-2 border-indigo-300 rounded-xl shadow-lg focus:outline-none focus:ring-2 focus:ring-pink-400 bg-white/80 text-lg md:text-xl font-semibold transition disabled:opacity-50 disabled:cursor-not-allowed"
                 value={selectedClass}
                 onChange={(e) => setSelectedClass(e.target.value)}
+                disabled={userClass !== null} // Disable for students
               >
-                {classes.map((cls) => (
+                {availableClasses.map((cls) => (
                   <option key={cls} value={cls}>
                     {cls}
                   </option>

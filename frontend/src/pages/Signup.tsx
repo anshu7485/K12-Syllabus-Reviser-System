@@ -170,13 +170,26 @@ const Signup: React.FC = () => {
               <label className="flex items-center gap-2 text-sm font-bold mb-1 bg-gradient-to-r from-red-500 via-pink-500 to-yellow-500 bg-clip-text text-transparent dark:from-red-400 dark:via-pink-400 dark:to-yellow-400">
                 <FaUserGraduate className="text-red-500" /> Class
               </label>
-              <input
-                type="text"
+              <select
                 value={studentClass}
                 onChange={(e) => setStudentClass(e.target.value)}
+                required
                 className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none dark:bg-gray-800 dark:text-white transition"
-                placeholder="e.g. 10th A"
-              />
+              >
+                <option value="">Select your class</option>
+                <option value="1">Class 1</option>
+                <option value="2">Class 2</option>
+                <option value="3">Class 3</option>
+                <option value="4">Class 4</option>
+                <option value="5">Class 5</option>
+                <option value="6">Class 6</option>
+                <option value="7">Class 7</option>
+                <option value="8">Class 8</option>
+                <option value="9">Class 9</option>
+                <option value="10">Class 10</option>
+                <option value="11">Class 11</option>
+                <option value="12">Class 12</option>
+              </select>
             </div>
           )}
 

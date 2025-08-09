@@ -294,6 +294,9 @@ def upload_question_v2():
 @app.route('/topics/<int:subject_id>', methods=['GET'])
 def get_topics_for_subject(subject_id):
     try:
+        # Check if student is trying to access their own class only
+        user = get_user_from_request()
+        
         cursor = mysql.connection.cursor()
         
         # Get subject details first
@@ -304,6 +307,11 @@ def get_topics_for_subject(subject_id):
             return jsonify({"error": "Subject not found"}), 404
             
         subject_name, class_name = subject_result
+        
+        # For students, check if they're trying to access their own class
+        if user and user['role'] == 'student':
+            if user['student_class'] != class_name:
+                return jsonify({"error": "Access denied: You can only access topics for your enrolled class"}), 403
         
         # Get unique topics for this subject and class
         query = """
@@ -500,25 +508,44 @@ def get_uploaded_questions(teacher_id):
 
 @app.route('/performance/summary', methods=['GET'])
 def get_performance_summary():
-    cursor = mysql.connection.cursor()
-    query = """
-        SELECT student_id, subject_name, topic_name, accuracy, time_spent 
-        FROM performance_summary
-    """
-    cursor.execute(query)
-    performance = cursor.fetchall()
-    cursor.close()
+    try:
+        # Get user from request
+        user = get_user_from_request()
+        
+        cursor = mysql.connection.cursor()
+        
+        # If student, only show their own performance
+        if user and user['role'] == 'student':
+            query = """
+                SELECT student_id, subject_name, topic_name, accuracy, time_spent 
+                FROM performance_summary
+                WHERE student_id = %s
+            """
+            cursor.execute(query, (user['id'],))
+        else:
+            # Teachers and admins can see all performance data
+            query = """
+                SELECT student_id, subject_name, topic_name, accuracy, time_spent 
+                FROM performance_summary
+            """
+            cursor.execute(query)
+            
+        performance = cursor.fetchall()
+        cursor.close()
 
-    result = []
-    for p in performance:
-        result.append({
-            "student_id": p[0],
-            "subject_name": p[1],
-            "topic_name": p[2],
-            "accuracy": float(p[3]),
-            "time_spent": p[4]
-        })
-    return jsonify(result), 200
+        result = []
+        for p in performance:
+            result.append({
+                "student_id": p[0],
+                "subject_name": p[1],
+                "topic_name": p[2],
+                "accuracy": float(p[3]),
+                "time_spent": p[4]
+            })
+        return jsonify(result), 200
+    except Exception as e:
+        print("Error in get_performance_summary():", e)
+        return jsonify({"error": str(e)}), 500
 
 # ============================ Error Handlers ============================
 
